@@ -24,6 +24,9 @@ public class UptimeMonitor implements Callable<Integer> {
 	@CommandLine.Option(names = {"-c", "--config"}, description = "Path to the configuration file to use.", defaultValue = "./config.yaml")
 	String configPath;
 
+	@CommandLine.Option(names = {"--no-cli"}, description = "Start the application without CLI support. It will run until it is forcibly shut down.", defaultValue = "false")
+	boolean ignoreCli;
+
 	private Config loadConfig() {
 		ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
 		Path file = Path.of(this.configPath);
@@ -53,7 +56,24 @@ public class UptimeMonitor implements Callable<Integer> {
 			monitors.add(monitor);
 		}
 		System.out.println("Started monitoring all configured sites.");
-		return this.runCLI(executor, monitors);
+		Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+			executor.shutdown();
+			for (var monitor : monitors) {
+				try {
+					monitor.close();
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+			}
+		}));
+		if (!ignoreCli) {
+			return this.runCLI(executor, monitors);
+		} else {
+			while (!executor.isTerminated()) {
+				Thread.sleep(3000);
+			}
+			return 0;
+		}
 	}
 
 	private int runCLI(ScheduledExecutorService executor, List<SiteMonitor> monitors) throws InterruptedException, IOException {
