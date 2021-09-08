@@ -2,6 +2,7 @@ package nl.gyrobian.uptime_monitor;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import nl.gyrobian.uptime_monitor.command.MeasureSubcommand;
 import picocli.CommandLine;
 
 import java.io.BufferedReader;
@@ -18,7 +19,10 @@ import java.util.concurrent.TimeUnit;
 
 @CommandLine.Command(
 		name = "uptime-monitor",
-		description = "Monitors and records the uptime of sites."
+		description = "Monitors and records the uptime of sites.",
+		subcommands = {
+				MeasureSubcommand.class
+		}
 )
 public class UptimeMonitor implements Callable<Integer> {
 	@CommandLine.Option(names = {"-c", "--config"}, description = "Path to the configuration file to use.", defaultValue = "./config.yaml")
