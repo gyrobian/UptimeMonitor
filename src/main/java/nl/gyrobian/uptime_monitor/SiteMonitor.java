@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
+import java.net.http.HttpConnectTimeoutException;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
@@ -127,6 +128,8 @@ public class SiteMonitor implements Closeable {
 			if (Files.size(this.recordFile) > this.maxFileSize) {
 				this.switchToNewFile();
 			}
+		} catch (HttpConnectTimeoutException e) {
+			System.err.println("Connection timed out while sending request to " + this.site.getUrl());
 		} catch (IOException | InterruptedException e) {
 			e.printStackTrace();
 		}
