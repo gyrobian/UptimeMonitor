@@ -1,15 +1,21 @@
 package nl.gyrobian.uptime_monitor.command;
 
-import org.apache.commons.csv.CSVFormat;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import nl.gyrobian.uptime_monitor.command.format.PdfWriter;
+import nl.gyrobian.uptime_monitor.command.format.PerformanceDataWriter;
+import nl.gyrobian.uptime_monitor.data.MeasurementService;
+import nl.gyrobian.uptime_monitor.data.PerformanceData;
 import picocli.CommandLine;
 
 import java.io.IOException;
+import java.io.OutputStream;
+import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.OffsetDateTime;
-import java.time.format.DateTimeFormatter;
+import java.util.Map;
 import java.util.concurrent.Callable;
 
 @CommandLine.Command(
@@ -17,6 +23,14 @@ import java.util.concurrent.Callable;
 		description = "Perform measurements on existing site metrics."
 )
 public class MeasureSubcommand implements Callable<Integer> {
+	public enum Format {TEXT, JSON, PDF}
+
+	public static final Map<Format, PerformanceDataWriter> formatWriters = Map.of(
+			Format.TEXT, MeasureSubcommand::writeText,
+			Format.JSON, MeasureSubcommand::writeJson,
+			Format.PDF, new PdfWriter()
+	);
+
 	@CommandLine.Parameters(index = "0", description = "The name of the site to measure.")
 	String siteName;
 
@@ -26,17 +40,17 @@ public class MeasureSubcommand implements Callable<Integer> {
 	@CommandLine.Option(names = {"--end"}, description = "The end date for measurement, as an ISO-8601 date.")
 	String endDate;
 
+	@CommandLine.Option(names = {"--format"}, description = "The format in which to output the results.", defaultValue = "TEXT")
+	Format format;
+
+	@CommandLine.Option(names = {"-o", "--output"}, description = "The file to which the results should be written.")
+	Path outputPath;
+
 	@Override
 	public Integer call() throws Exception {
-		System.out.println("Measuring data for site " + siteName);
-		Path siteDir = Path.of("sites", siteName);
-
-		long entries = 0;
-		long responseTimeSum = 0;
-		long errorResponses = 0;
-
 		LocalDate measurementStartDate = null;
 		LocalDate measurementEndDate = null;
+
 		if (startDate != null && !startDate.isBlank()) {
 			measurementStartDate = LocalDate.parse(startDate);
 		}
@@ -44,61 +58,27 @@ public class MeasureSubcommand implements Callable<Integer> {
 			measurementEndDate = LocalDate.parse(endDate);
 		}
 
-		OffsetDateTime start = null;
-		OffsetDateTime end = null;
-
-		try (var s = Files.list(siteDir)) {
-			for (var path : s.toList()) {
-				if (Files.isRegularFile(path) && path.getFileName().toString().endsWith(".csv")) {
-					LocalDateTime fileStartTimestamp = LocalDateTime.parse(
-							path.getFileName().toString().split("\\.")[0],
-							DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss")
-					);
-					// Skip this file if it starts outside of our measurement period.
-					if (measurementEndDate != null && fileStartTimestamp.isAfter(measurementEndDate.atStartOfDay())) {
-						continue;
-					}
-					System.out.println("Reading " + path);
-					try {
-						var reader = Files.newBufferedReader(path);
-						boolean isHeader = true;
-						for (var record : CSVFormat.DEFAULT.parse(reader)) {
-							if (isHeader) {
-								isHeader = false;
-								continue;
-							}
-
-							OffsetDateTime timestamp = OffsetDateTime.parse(record.get(0));
-							// Skip this record if its timestamp is outside of the measurement period.
-							if (
-									(measurementStartDate != null && timestamp.toLocalDateTime().isBefore(measurementStartDate.atStartOfDay())) ||
-									(measurementEndDate != null && timestamp.toLocalDateTime().isAfter(measurementEndDate.plusDays(1).atStartOfDay()))
-							) {
-								continue;
-							}
-							if (start == null || start.isAfter(timestamp)) start = timestamp;
-							if (end == null || end.isBefore(timestamp)) end = timestamp;
-
-							entries++;
-							responseTimeSum += Long.parseLong(record.get(3));
-							int responseCode = Integer.parseInt(record.get(2));
-							if (responseCode < 200 || responseCode > 299) {
-								errorResponses++;
-							}
-						}
-						reader.close();
-					} catch (IOException e) {
-						e.printStackTrace();
-					}
-				}
-			}
-		}
-
-		System.out.printf("Read %d entries between %s and %s.\n", entries, start, end);
-		double averageResponseTime = responseTimeSum / (double) entries;
-		System.out.printf("Average response time: %.2f ms\n", averageResponseTime);
-		System.out.printf("There were %d erroneous responses received.\n", errorResponses);
+		var data = new MeasurementService().getData(siteName, measurementStartDate, measurementEndDate);
+		OutputStream out = outputPath == null ? System.out : Files.newOutputStream(outputPath);
+		var writer = formatWriters.get(format);
+		writer.write(data, out);
 
 		return 0;
+	}
+
+	private static void writeText(PerformanceData data, OutputStream out) {
+		PrintWriter pw = new PrintWriter(out, false);
+		pw.printf("Performance data for site %s from %s to %s, generated in %d ms.\n", data.siteName(), data.startDate(), data.endDate(), data.measurementDuration());
+		pw.printf("Average response time: %.2f (ms)\nPercent of requests that were successful: %.2f\n", data.averageResponseTime(), data.successPercent());
+		pw.printf("Total number of entries: %d\n", data.entries().length);
+		pw.close();
+	}
+
+	private static void writeJson(PerformanceData data, OutputStream out) throws IOException {
+		ObjectMapper mapper = new ObjectMapper();
+		mapper.registerModule(new JavaTimeModule());
+		mapper.configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false);
+		mapper.writerWithDefaultPrettyPrinter().writeValue(out, data);
+		out.close();
 	}
 }

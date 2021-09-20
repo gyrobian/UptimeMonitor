@@ -26,6 +26,8 @@ import java.util.stream.Collectors;
  * single site, and recording the results in a CSV file.
  */
 public class SiteMonitor implements Closeable {
+	public static final DateTimeFormatter FILE_TIMESTAMP_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss");
+
 	private final Config.SiteConfig site;
 	private final HttpClient httpClient;
 	private final HttpRequest.Builder requestBuilder;
@@ -69,7 +71,7 @@ public class SiteMonitor implements Closeable {
 					.sorted(Comparator.comparing(Path::getFileName))
 					.collect(Collectors.toList());
 			if (files.isEmpty() || Files.size(files.get(files.size() - 1)) > this.maxFileSize) {
-				String timestamp = ZonedDateTime.now(ZoneOffset.UTC).format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"));
+				String timestamp = ZonedDateTime.now(ZoneOffset.UTC).format(FILE_TIMESTAMP_FORMATTER);
 				this.recordFile = dir.resolve(timestamp + ".csv");
 				shouldWriteHeader = true;
 				System.out.println("Creating new file to record monitoring data for site " + this.site.getName() + " at " + this.recordFile);
@@ -92,7 +94,7 @@ public class SiteMonitor implements Closeable {
 	 */
 	private void switchToNewFile() throws IOException {
 		this.csvPrinter.close();
-		String ts = ZonedDateTime.now(ZoneOffset.UTC).format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"));
+		String ts = ZonedDateTime.now(ZoneOffset.UTC).format(FILE_TIMESTAMP_FORMATTER);
 		this.recordFile = this.recordFile.getParent().resolve(ts + ".csv");
 		System.out.println("Creating new file to record monitoring data for site " + this.site.getName() + " at " + this.recordFile);
 		var writer = Files.newBufferedWriter(recordFile, StandardOpenOption.WRITE, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
