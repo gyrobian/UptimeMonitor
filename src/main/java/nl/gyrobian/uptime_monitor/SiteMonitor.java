@@ -1,5 +1,6 @@
 package nl.gyrobian.uptime_monitor;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
 
@@ -32,6 +33,7 @@ public class SiteMonitor implements Closeable {
 	private final Config.SiteConfig site;
 	private final HttpClient httpClient;
 	private final HttpRequest.Builder requestBuilder;
+	private final ObjectMapper mapper;
 	private final long maxFileSize;
 
 	private CSVPrinter csvPrinter;
@@ -40,6 +42,7 @@ public class SiteMonitor implements Closeable {
 	public SiteMonitor(Config.SiteConfig site, long maxFileSize) throws IOException {
 		this.site = site;
 		this.maxFileSize = maxFileSize;
+		this.mapper = new ObjectMapper();
 		this.httpClient = HttpClient.newBuilder()
 				.followRedirects(HttpClient.Redirect.ALWAYS)
 				.connectTimeout(Duration.ofSeconds(5))
@@ -118,7 +121,7 @@ public class SiteMonitor implements Closeable {
 			String details = null;
 			var contentType = response.headers().firstValue("Content-Type");
 			if (contentType.isPresent() && contentType.get().equalsIgnoreCase("application/json")) {
-				details = response.body().toString();
+				details = new String(response.body().readAllBytes());
 			}
 			response.body().close();
 			this.csvPrinter.printRecord(timestamp, this.site.getUrl(), response.statusCode(), duration, details);
