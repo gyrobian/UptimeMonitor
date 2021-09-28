@@ -5,6 +5,7 @@ import org.apache.commons.csv.CSVFormat;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
@@ -17,18 +18,20 @@ public class MeasurementService {
 		Path siteDir = Path.of("sites", siteName);
 
 		long responseTimeSum = 0;
+		long totalDowntime = 0;
+		long totalUptime = 0;
 		long errorResponses = 0;
 		long fileSizeTraversed = 0;
 		int fileCount = 0;
 		long startedAt = System.currentTimeMillis();
 
 		List<MonitorEntry> entries = new ArrayList<>();
+		MonitorEntry previousEntry = null;
 
 		try (var s = Files.list(siteDir)) {
 			for (var path : s.toList()) {
 				if (shouldReadFile(path, endDate)) {
-					try {
-						var reader = Files.newBufferedReader(path);
+					try (var reader = Files.newBufferedReader(path)) {
 						boolean isHeader = true;
 						for (var record : CSVFormat.DEFAULT.parse(reader)) {
 							if (isHeader) {
@@ -40,13 +43,21 @@ public class MeasurementService {
 							// Skip this record if its timestamp is outside the measurement period.
 							if (shouldReadRecord(entry.timestamp(), startDate, endDate)) {
 								responseTimeSum += entry.responseTime();
-								if (entry.responseCode() < 200 || entry.responseCode() > 299) {
+								Duration timeSinceLastEntry = previousEntry == null ? Duration.ZERO : Duration.between(previousEntry.timestamp(), entry.timestamp());
+								if (!entry.isOk()) {
 									errorResponses++;
+									// If we have noticed a continuous span of time in which the service is consistently not ok, measure this as totalDowntime.
+									if (previousEntry != null && !previousEntry.isOk()) {
+										totalDowntime += timeSinceLastEntry.toMillis();
+									}
+								} else if (previousEntry != null && previousEntry.isOk()) {
+									// If we have a continuous span of time in which the service is consistently ok, measure this as totalUptime.
+									totalUptime += timeSinceLastEntry.toMillis();
 								}
 								entries.add(entry);
+								previousEntry = entry;
 							}
 						}
-						reader.close();
 						fileSizeTraversed += Files.size(path);
 						fileCount++;
 					} catch (IOException e) {
@@ -56,13 +67,23 @@ public class MeasurementService {
 			}
 		}
 
+		float averageResponseTime = (float) (responseTimeSum / (double) entries.size());
+		float successPercentage = (float) ((entries.size() - errorResponses) / (double) entries.size()) * 100.0f;
+		float uptimePercentage = 100.0f;
+		if (totalUptime > 0 || totalDowntime > 0) {
+			uptimePercentage *= (float) (totalUptime / (double) (totalUptime + totalDowntime));
+		}
+
 		return new PerformanceData(
 				OffsetDateTime.now(),
 				startDate != null ? startDate : entries.get(0).timestamp().toLocalDate(),
 				endDate != null ? endDate : entries.get(entries.size() - 1).timestamp().toLocalDate(),
 				siteName,
-				(float) (responseTimeSum / (double) entries.size()),
-				(float) ((entries.size() - errorResponses) / (double) entries.size()) * 100.0f,
+				averageResponseTime,
+				successPercentage,
+				Duration.ofMillis(totalUptime),
+				Duration.ofMillis(totalDowntime),
+				uptimePercentage,
 				System.currentTimeMillis() - startedAt,
 				fileSizeTraversed,
 				fileCount,

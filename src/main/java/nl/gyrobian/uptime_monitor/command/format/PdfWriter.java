@@ -7,6 +7,7 @@ import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
+import org.apache.pdfbox.pdmodel.font.PDFont;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 
 import java.awt.*;
@@ -32,7 +33,7 @@ public class PdfWriter implements PerformanceDataWriter {
 		PDPageContentStream cs = new PDPageContentStream(doc, page);
 		writePdfHeading(cs, page, data);
 		writePdfGeneralStats(cs, page, data);
-		writeEntries(doc, page, cs, data);
+//		writeEntries(doc, page, cs, data);
 		cs.close();
 		doc.save(out);
 		doc.close();
@@ -79,25 +80,22 @@ public class PdfWriter implements PerformanceDataWriter {
 
 	private void writePdfGeneralStats(PDPageContentStream cs, PDPage page, PerformanceData data) throws IOException {
 		cs.beginText();
-		cs.newLineAtOffset(page.getCropBox().getLowerLeftX() + LEFT_MARGIN, page.getCropBox().getUpperRightY() - TOP_MARGIN - 150);
-		cs.setNonStrokingColor(Color.BLACK);
-		cs.setFont(PDType1Font.HELVETICA_BOLD, 18);
-		cs.showText("General Information");
-		cs.newLineAtOffset(0, -20);
-		cs.setFont(PDType1Font.HELVETICA, 12);
-		cs.showText("Average Response Time: ");
-		cs.setFont(PDType1Font.COURIER_BOLD, 12);
-		cs.showText(String.format("%.2f ms", data.averageResponseTime()));
-		cs.newLineAtOffset(0, -16);
-		cs.setFont(PDType1Font.HELVETICA, 12);
-		cs.showText("Successful requests: ");
-		cs.setFont(PDType1Font.COURIER_BOLD, 12);
-		cs.showText(String.format("%.2f%%", data.successPercent()));
-		cs.newLineAtOffset(0, -16);
-		cs.setFont(PDType1Font.HELVETICA, 12);
-		cs.showText("Total Measurements Recorded: ");
-		cs.setFont(PDType1Font.COURIER_BOLD, 12);
-		cs.showText(String.valueOf(data.entries().length));
+		float tx = page.getCropBox().getLowerLeftX() + LEFT_MARGIN;
+		float ty = page.getCropBox().getUpperRightY() - TOP_MARGIN - 150;
+		writeLine(cs, tx, ty, PDType1Font.HELVETICA_BOLD, 18, "General Information");
+		writeLine(cs, -20, "Uptime: ");
+		writeMonospaceBold(cs, String.format("%.4f%%", data.uptimePercent()));
+		writeLine(cs, -16, "Average Response Time: ");
+		writeMonospaceBold(cs, String.format("%.4f ms", data.averageResponseTime()));
+
+		writeLine(cs, -16, "Successful Request Percentage: ");
+		writeMonospaceBold(cs, String.format("%.2f%%", data.successPercent()));
+		writeLine(cs, -16, "Total Uptime: ");
+		writeMonospaceBold(cs, String.format("%dd %02dh %02dm %02ds", data.totalUptime().toDays(), data.totalUptime().toHoursPart(), data.totalUptime().toMinutesPart(), data.totalUptime().toSecondsPart()));
+		writeLine(cs, -16, "Total Downtime: ");
+		writeMonospaceBold(cs, String.format("%dd %02dh %02dm %02ds", data.totalDowntime().toDays(), data.totalDowntime().toHoursPart(), data.totalDowntime().toMinutesPart(), data.totalDowntime().toSecondsPart()));
+		writeLine(cs, -16, "Total Measurements Recorded: ");
+		writeMonospaceBold(cs, String.valueOf(data.entries().length));
 		cs.endText();
 	}
 
@@ -148,5 +146,24 @@ public class PdfWriter implements PerformanceDataWriter {
 		}
 
 		table.draw();
+	}
+
+	private void writeLine(PDPageContentStream cs, float tx, float ty, PDFont font, float fontSize, String text) throws IOException {
+		cs.newLineAtOffset(tx, ty);
+		cs.setFont(font, fontSize);
+		cs.showText(text);
+	}
+
+	private void writeLine(PDPageContentStream cs, float ty, PDFont font, float fontSize, String text) throws IOException {
+		writeLine(cs, 0, ty, font, fontSize, text);
+	}
+
+	private void writeLine(PDPageContentStream cs, float ty, String text) throws IOException {
+		writeLine(cs, ty, PDType1Font.HELVETICA, 12, text);
+	}
+
+	private void writeMonospaceBold(PDPageContentStream cs, String text) throws IOException {
+		cs.setFont(PDType1Font.COURIER_BOLD, 12);
+		cs.showText(text);
 	}
 }

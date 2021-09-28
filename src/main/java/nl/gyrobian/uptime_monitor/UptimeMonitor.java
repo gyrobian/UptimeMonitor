@@ -18,8 +18,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 @CommandLine.Command(
-		name = "uptime-monitor",
-		description = "Monitors and records the uptime of sites.",
+		name = "totalUptime-monitor",
+		description = "Monitors and records the totalUptime of sites.",
 		subcommands = {
 				MeasureSubcommand.class
 		}

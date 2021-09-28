@@ -23,4 +23,8 @@ public record MonitorEntry(
 				record.get(4)
 		);
 	}
+
+	public boolean isOk() {
+		return responseCode < 400;
+	}
 }
