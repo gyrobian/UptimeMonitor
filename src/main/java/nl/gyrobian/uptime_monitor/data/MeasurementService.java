@@ -13,6 +13,9 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * The main logic which analyzes data and produces a cumulative dataset result.
+ */
 public class MeasurementService {
 	public PerformanceData getData(String siteName, LocalDate startDate, LocalDate endDate) throws IOException {
 		Path siteDir = Path.of("sites", siteName);
@@ -23,11 +26,12 @@ public class MeasurementService {
 		long errorResponses = 0;
 		long fileSizeTraversed = 0;
 		int fileCount = 0;
-		long startedAt = System.currentTimeMillis();
 
 		List<MonitorEntry> entries = new ArrayList<>();
 		MonitorEntry previousEntry = null;
 
+		long measurementStartedAt = System.currentTimeMillis();
+		// Iterate over all files that have been generated for the selected site.
 		try (var s = Files.list(siteDir)) {
 			for (var path : s.toList()) {
 				if (shouldReadFile(path, endDate)) {
@@ -84,13 +88,20 @@ public class MeasurementService {
 				Duration.ofMillis(totalUptime),
 				Duration.ofMillis(totalDowntime),
 				uptimePercentage,
-				System.currentTimeMillis() - startedAt,
+				System.currentTimeMillis() - measurementStartedAt,
 				fileSizeTraversed,
 				fileCount,
 				entries.toArray(new MonitorEntry[0])
 		);
 	}
 
+	/**
+	 * Determines if it is necessary to read a file for a measurement, based on
+	 * the end date of the measurement period, and the file's timestamp name.
+	 * @param path The path to the file.
+	 * @param endDate The measurement period's ending date (inclusive).
+	 * @return True if the file's contents should be processed, or false otherwise.
+	 */
 	private boolean shouldReadFile(Path path, LocalDate endDate) {
 		if (!Files.isRegularFile(path) || !path.getFileName().toString().endsWith(".csv")) return false;
 		LocalDateTime fileStartTimestamp = LocalDateTime.parse(
@@ -101,6 +112,15 @@ public class MeasurementService {
 		return endDate == null || !fileStartTimestamp.isAfter(endDate.atStartOfDay());
 	}
 
+	/**
+	 * Determines if a single record should be read, based on the measurement
+	 * period's start and end date, and the record's timestamp.
+	 * @param recordTimestamp The record's timestamp.
+	 * @param startDate The measurement period's starting date (inclusive).
+	 * @param endDate The measurement period's ending date (inclusive).
+	 * @return True if the record should be read and included in data, or false
+	 * otherwise.
+	 */
 	private boolean shouldReadRecord(OffsetDateTime recordTimestamp, LocalDate startDate, LocalDate endDate) {
 		return (startDate == null || recordTimestamp.toLocalDateTime().isAfter(startDate.atStartOfDay())) &&
 				(endDate == null || recordTimestamp.toLocalDateTime().isBefore(endDate.plusDays(1).atStartOfDay()));
