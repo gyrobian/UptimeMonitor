@@ -11,6 +11,7 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -32,7 +33,7 @@ public class MeasurementService {
 
 		long measurementStartedAt = System.currentTimeMillis();
 		// Iterate over all files that have been generated for the selected site.
-		try (var s = Files.list(siteDir)) {
+		try (var s = Files.list(siteDir).sorted(Comparator.comparing(Path::getFileName))) {
 			for (var path : s.toList()) {
 				if (shouldReadFile(path, endDate)) {
 					try (var reader = Files.newBufferedReader(path)) {

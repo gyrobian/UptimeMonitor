@@ -25,6 +25,11 @@ import java.util.concurrent.TimeUnit;
 		}
 )
 public class UptimeMonitor implements Callable<Integer> {
+	static {
+		// Disable apache logging which would otherwise show when using PDFBox.
+		System.setProperty("org.apache.commons.logging.Log", "org.apache.commons.logging.impl.NoOpLog");
+	}
+
 	@CommandLine.Option(names = {"-c", "--config"}, description = "Path to the configuration file to use.", defaultValue = "./config.yaml")
 	String configPath;
 
