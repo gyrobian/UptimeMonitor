@@ -12,10 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.Callable;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 @CommandLine.Command(
 		name = "totalUptime-monitor",
@@ -56,25 +53,14 @@ public class UptimeMonitor implements Callable<Integer> {
 			return 1;
 		}
 		long maxFileSize = parseSize(config.getMaxFileSize());
-		List<SiteMonitor> monitors = new ArrayList<>(config.getSites().size());
 		ScheduledExecutorService executor = Executors.newScheduledThreadPool(config.getSites().size());
-		for (var site : config.getSites()) {
-			System.out.printf("Initializing monitoring of site \"%s\" every %d seconds.\n", site.getName(), site.getInterval());
-			var monitor = new SiteMonitor(site, maxFileSize);
-			executor.scheduleAtFixedRate(monitor::monitor, 0, site.getInterval(), TimeUnit.SECONDS);
-			monitors.add(monitor);
+		List<SiteMonitor> monitors = initializeSiteMonitors(config, maxFileSize, executor);
+		if (monitors.isEmpty()) {
+			System.err.println("No site monitors were initialized. Please add some and run again.");
+			return 1;
 		}
 		System.out.println("Started monitoring all configured sites.");
-		Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-			executor.shutdown();
-			for (var monitor : monitors) {
-				try {
-					monitor.close();
-				} catch (IOException e) {
-					e.printStackTrace();
-				}
-			}
-		}));
+		addShutdownHook(executor, monitors);
 		if (!ignoreCli) {
 			return this.runCLI(executor, monitors);
 		} else {
@@ -83,6 +69,21 @@ public class UptimeMonitor implements Callable<Integer> {
 			}
 			return 0;
 		}
+	}
+
+	private List<SiteMonitor> initializeSiteMonitors(Config config, long maxFileSize, ScheduledExecutorService executor) {
+		List<SiteMonitor> monitors = new ArrayList<>(config.getSites().size());
+		for (var site : config.getSites()) {
+			System.out.printf("Initializing monitoring of site \"%s\" every %d seconds.\n", site.getName(), site.getInterval());
+			try {
+				var monitor = new SiteMonitor(site, maxFileSize);
+				executor.scheduleAtFixedRate(monitor::monitor, 0, site.getInterval(), TimeUnit.SECONDS);
+				monitors.add(monitor);
+			} catch (IOException e) {
+				System.err.println("An error occurred and the site monitor for site \"" + site.getName() + "\" could not be started.");
+			}
+		}
+		return monitors;
 	}
 
 	private int runCLI(ScheduledExecutorService executor, List<SiteMonitor> monitors) throws InterruptedException, IOException {
@@ -102,6 +103,19 @@ public class UptimeMonitor implements Callable<Integer> {
 			monitor.close();
 		}
 		return 0;
+	}
+
+	private void addShutdownHook(ExecutorService executor, List<SiteMonitor> monitors) {
+		Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+			executor.shutdown();
+			for (var monitor : monitors) {
+				try {
+					monitor.close();
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+			}
+		}));
 	}
 
 	public static void main(String[] args) {
