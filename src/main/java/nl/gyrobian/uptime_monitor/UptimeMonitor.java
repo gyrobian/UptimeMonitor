@@ -2,7 +2,10 @@ package nl.gyrobian.uptime_monitor;
 
 import nl.gyrobian.uptime_monitor.command.MeasureSubcommand;
 import nl.gyrobian.uptime_monitor.data.FocusInterval;
-import nl.gyrobian.uptime_monitor.report.*;
+import nl.gyrobian.uptime_monitor.report.Format;
+import nl.gyrobian.uptime_monitor.report.Interval;
+import nl.gyrobian.uptime_monitor.report.ReportGenerationJob;
+import nl.gyrobian.uptime_monitor.report.ReportGenerator;
 import org.quartz.*;
 import org.quartz.impl.StdSchedulerFactory;
 import picocli.CommandLine;
@@ -145,12 +148,6 @@ public class UptimeMonitor implements Callable<Integer> {
 					.withSchedule(interval.getSchedule())
 					.build();
 			scheduler.scheduleJob(job, trigger);
-			// TEMP
-			try {
-				generator.generate();
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
 		}
 		scheduler.start();
 	}
