@@ -1,6 +1,6 @@
 package nl.gyrobian.uptime_monitor.command.format;
 
-import nl.gyrobian.uptime_monitor.data.PerformanceData;
+import nl.gyrobian.uptime_monitor.data.ReportData;
 
 import java.io.OutputStream;
 
@@ -9,5 +9,5 @@ import java.io.OutputStream;
  * single site.
  */
 public interface PerformanceDataWriter {
-	void write(PerformanceData data, OutputStream out) throws Exception;
+	void write(ReportData data, OutputStream out) throws Exception;
 }

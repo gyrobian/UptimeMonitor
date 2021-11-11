@@ -2,7 +2,7 @@ package nl.gyrobian.uptime_monitor.command.format;
 
 import be.quodlibet.boxable.BaseTable;
 import be.quodlibet.boxable.Row;
-import nl.gyrobian.uptime_monitor.data.PerformanceData;
+import nl.gyrobian.uptime_monitor.data.ReportData;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
@@ -26,7 +26,7 @@ public class PdfWriter implements PerformanceDataWriter {
 	private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("d MMMM yyyy");
 
 	@Override
-	public void write(PerformanceData data, OutputStream out) throws Exception {
+	public void write(ReportData data, OutputStream out) throws IOException {
 		PDDocument doc = new PDDocument();
 		PDPage page = new PDPage(PDRectangle.A4);
 		doc.addPage(page);
@@ -39,7 +39,7 @@ public class PdfWriter implements PerformanceDataWriter {
 		doc.close();
 	}
 
-	private void writePdfHeading(PDPageContentStream cs, PDPage page, PerformanceData data) throws IOException {
+	private void writePdfHeading(PDPageContentStream cs, PDPage page, ReportData data) throws IOException {
 		float leftMargin = page.getCropBox().getLowerLeftX() + LEFT_MARGIN;
 		float rightMargin = page.getCropBox().getUpperRightX() - LEFT_MARGIN;
 		float topMargin = page.getCropBox().getUpperRightY() - TOP_MARGIN;
@@ -78,28 +78,23 @@ public class PdfWriter implements PerformanceDataWriter {
 		cs.stroke();
 	}
 
-	private void writePdfGeneralStats(PDPageContentStream cs, PDPage page, PerformanceData data) throws IOException {
+	private void writePdfGeneralStats(PDPageContentStream cs, PDPage page, ReportData data) throws IOException {
+		var ag = data.aggregatePerformance();
 		cs.beginText();
 		float tx = page.getCropBox().getLowerLeftX() + LEFT_MARGIN;
 		float ty = page.getCropBox().getUpperRightY() - TOP_MARGIN - 150;
 		writeLine(cs, tx, ty, PDType1Font.HELVETICA_BOLD, 18, "General Information");
-		writeLine(cs, -20, "Uptime: ");
-		writeMonospaceBold(cs, String.format("%.4f%%", data.uptimePercent()));
-		writeLine(cs, -16, "Average Response Time: ");
-		writeMonospaceBold(cs, String.format("%.4f ms", data.averageResponseTime()));
+		writePerformanceData(cs, ag);
 
-		writeLine(cs, -16, "Successful Request Percentage: ");
-		writeMonospaceBold(cs, String.format("%.2f%%", data.successPercent()));
-		writeLine(cs, -16, "Total Uptime: ");
-		writeMonospaceBold(cs, String.format("%dd %02dh %02dm %02ds", data.totalUptime().toDays(), data.totalUptime().toHoursPart(), data.totalUptime().toMinutesPart(), data.totalUptime().toSecondsPart()));
-		writeLine(cs, -16, "Total Downtime: ");
-		writeMonospaceBold(cs, String.format("%dd %02dh %02dm %02ds", data.totalDowntime().toDays(), data.totalDowntime().toHoursPart(), data.totalDowntime().toMinutesPart(), data.totalDowntime().toSecondsPart()));
-		writeLine(cs, -16, "Total Measurements Recorded: ");
-		writeMonospaceBold(cs, String.valueOf(data.entries().length));
+		for (var entry : data.focusIntervalPerformanceData().entrySet()) {
+			var fi = entry.getKey();
+			writeLine(cs, -24, PDType1Font.HELVETICA_BOLD, 16, "Performance for " + fi.from() + " to " + fi.to());
+			writePerformanceData(cs, entry.getValue());
+		}
 		cs.endText();
 	}
 
-	private void writeEntries(PDDocument doc, PDPage page, PDPageContentStream cs, PerformanceData data) throws IOException {
+	private void writeEntries(PDDocument doc, PDPage page, PDPageContentStream cs, ReportData data) throws IOException {
 		cs.beginText();
 		cs.setFont(PDType1Font.HELVETICA_BOLD, 18);
 		cs.newLineAtOffset(LEFT_MARGIN, page.getMediaBox().getUpperRightY() - (TOP_MARGIN + 240));
@@ -146,6 +141,21 @@ public class PdfWriter implements PerformanceDataWriter {
 		}
 
 		table.draw();
+	}
+
+	private void writePerformanceData(PDPageContentStream cs, ReportData.PerformanceData d) throws IOException {
+		writeLine(cs, -20, "Uptime: ");
+		writeMonospaceBold(cs, String.format("%.4f%%", d.uptimePercent()));
+		writeLine(cs, -16, "Average Response Time: ");
+		writeMonospaceBold(cs, String.format("%.4f ms", d.averageResponseTime()));
+		writeLine(cs, -16, "Successful Request Percentage: ");
+		writeMonospaceBold(cs, String.format("%.2f%%", d.successPercent()));
+		writeLine(cs, -16, "Total Uptime: ");
+		writeMonospaceBold(cs, String.format("%dd %02dh %02dm %02ds", d.totalUptime().toDays(), d.totalUptime().toHoursPart(), d.totalUptime().toMinutesPart(), d.totalUptime().toSecondsPart()));
+		writeLine(cs, -16, "Total Downtime: ");
+		writeMonospaceBold(cs, String.format("%dd %02dh %02dm %02ds", d.totalDowntime().toDays(), d.totalDowntime().toHoursPart(), d.totalDowntime().toMinutesPart(), d.totalDowntime().toSecondsPart()));
+		writeLine(cs, -16, "Total Measurements Recorded: ");
+		writeMonospaceBold(cs, String.valueOf(d.entryCount()));
 	}
 
 	private void writeLine(PDPageContentStream cs, float tx, float ty, PDFont font, float fontSize, String text) throws IOException {

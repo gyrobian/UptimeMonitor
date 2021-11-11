@@ -1,15 +1,18 @@
 package nl.gyrobian.uptime_monitor;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import nl.gyrobian.uptime_monitor.command.MeasureSubcommand;
+import nl.gyrobian.uptime_monitor.data.FocusInterval;
+import nl.gyrobian.uptime_monitor.report.*;
+import org.quartz.*;
+import org.quartz.impl.StdSchedulerFactory;
 import picocli.CommandLine;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalTime;
+import java.time.Period;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.*;
@@ -33,21 +36,9 @@ public class UptimeMonitor implements Callable<Integer> {
 	@CommandLine.Option(names = {"--no-cli"}, description = "Start the application without CLI support. It will run until it is forcibly shut down.", defaultValue = "false")
 	boolean ignoreCli;
 
-	private Config loadConfig() {
-		ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
-		Path file = Path.of(this.configPath);
-		if (Files.notExists(file)) return null;
-		try {
-			return mapper.readValue(Files.newBufferedReader(file), Config.class);
-		} catch (IOException e) {
-			System.err.println("IOException occurred while reading " + file);
-			return null;
-		}
-	}
-
 	@Override
 	public Integer call() throws Exception {
-		var config = this.loadConfig();
+		var config = Config.load(Path.of(this.configPath));
 		if (config == null) {
 			System.err.println("Could not load configuration.");
 			return 1;
@@ -60,7 +51,11 @@ public class UptimeMonitor implements Callable<Integer> {
 			return 1;
 		}
 		System.out.println("Started monitoring all configured sites.");
-		addShutdownHook(executor, monitors);
+		Scheduler scheduler = StdSchedulerFactory.getDefaultScheduler();
+		if (config.getReports() != null && !config.getReports().isEmpty()) {
+			initializeReportGenerators(config.getReports(), scheduler);
+		}
+		addShutdownHook(executor, monitors, scheduler);
 		if (!ignoreCli) {
 			return this.runCLI(executor, monitors);
 		} else {
@@ -105,9 +100,14 @@ public class UptimeMonitor implements Callable<Integer> {
 		return 0;
 	}
 
-	private void addShutdownHook(ExecutorService executor, List<SiteMonitor> monitors) {
+	private void addShutdownHook(ExecutorService executor, List<SiteMonitor> monitors, Scheduler scheduler) {
 		Runtime.getRuntime().addShutdownHook(new Thread(() -> {
 			executor.shutdown();
+			try {
+				scheduler.shutdown();
+			} catch (SchedulerException e) {
+				e.printStackTrace();
+			}
 			for (var monitor : monitors) {
 				try {
 					monitor.close();
@@ -116,6 +116,43 @@ public class UptimeMonitor implements Callable<Integer> {
 				}
 			}
 		}));
+	}
+
+	private void initializeReportGenerators(List<Config.ReportConfig> reportConfigs, Scheduler scheduler) throws SchedulerException {
+		for (var report : reportConfigs) {
+			if (report.getSites() == null || report.getSites().isEmpty()) throw new IllegalArgumentException("Missing sites for report " + report.getName());
+			Interval interval = Interval.valueOf(report.getInterval().trim().toUpperCase());
+			Format format = Format.valueOf(report.getFormat().trim().toUpperCase());
+			Period span = Period.parse(report.getSpan());
+			List<FocusInterval> focusIntervals = new ArrayList<>();
+			if (report.getFocusIntervals() != null && !report.getFocusIntervals().isEmpty()) {
+				for (var focusIntervalString : report.getFocusIntervals()) {
+					String[] parts = focusIntervalString.split("-");
+					if (parts.length != 2) throw new IllegalArgumentException("Invalid focus interval format: " + focusIntervalString);
+					var from = LocalTime.parse(parts[0].trim());
+					var to = LocalTime.parse(parts[1].trim());
+					if (from.isAfter(to)) throw new IllegalArgumentException("Invalid focus interval format: " + focusIntervalString);
+					focusIntervals.add(new FocusInterval(from, to));
+				}
+			}
+			JobDetail job = JobBuilder.newJob(ReportGenerationJob.class)
+					.withIdentity("report-generation-" + report.getName(), "reports")
+					.build();
+			var generator = new ReportGenerator(report.getName(), report.getSites(), format, span, focusIntervals);
+			job.getJobDataMap().put("generator", generator);
+			Trigger trigger = TriggerBuilder.newTrigger()
+					.withIdentity("report-generation-trigger-" + report.getName(), "report-triggers")
+					.withSchedule(interval.getSchedule())
+					.build();
+			scheduler.scheduleJob(job, trigger);
+			// TEMP
+			try {
+				generator.generate();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
+		scheduler.start();
 	}
 
 	public static void main(String[] args) {

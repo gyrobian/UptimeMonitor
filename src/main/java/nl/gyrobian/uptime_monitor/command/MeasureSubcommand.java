@@ -6,7 +6,7 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import nl.gyrobian.uptime_monitor.command.format.PdfWriter;
 import nl.gyrobian.uptime_monitor.command.format.PerformanceDataWriter;
 import nl.gyrobian.uptime_monitor.data.MeasurementService;
-import nl.gyrobian.uptime_monitor.data.PerformanceData;
+import nl.gyrobian.uptime_monitor.data.ReportData;
 import picocli.CommandLine;
 
 import java.io.IOException;
@@ -15,6 +15,7 @@ import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
 
@@ -58,7 +59,7 @@ public class MeasureSubcommand implements Callable<Integer> {
 			measurementEndDate = LocalDate.parse(endDate);
 		}
 
-		var data = new MeasurementService().getData(siteName, measurementStartDate, measurementEndDate);
+		var data = new MeasurementService().getData(siteName, measurementStartDate, measurementEndDate, List.of());
 		OutputStream out = outputPath == null ? System.out : Files.newOutputStream(outputPath);
 		var writer = formatWriters.get(format);
 		writer.write(data, out);
@@ -66,15 +67,15 @@ public class MeasureSubcommand implements Callable<Integer> {
 		return 0;
 	}
 
-	private static void writeText(PerformanceData data, OutputStream out) {
+	private static void writeText(ReportData data, OutputStream out) {
 		PrintWriter pw = new PrintWriter(out, false);
 		pw.printf("Performance data for site %s from %s to %s, generated in %d ms.\n", data.siteName(), data.startDate(), data.endDate(), data.measurementDuration());
-		pw.printf("Average response time: %.2f (ms)\nPercent of requests that were successful: %.2f\n", data.averageResponseTime(), data.successPercent());
+		pw.printf("Average response time: %.2f (ms)\nPercent of requests that were successful: %.2f\n", data.aggregatePerformance().averageResponseTime(), data.aggregatePerformance().successPercent());
 		pw.printf("Total number of entries: %d\n", data.entries().length);
 		pw.close();
 	}
 
-	private static void writeJson(PerformanceData data, OutputStream out) throws IOException {
+	private static void writeJson(ReportData data, OutputStream out) throws IOException {
 		ObjectMapper mapper = new ObjectMapper();
 		mapper.registerModule(new JavaTimeModule());
 		mapper.configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false);

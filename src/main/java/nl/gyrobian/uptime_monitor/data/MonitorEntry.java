@@ -13,7 +13,7 @@ public record MonitorEntry(
 		int responseCode,
 		int responseTime,
 		String details
-) {
+) implements Comparable<MonitorEntry> {
 	public static MonitorEntry fromCsvRecord(CSVRecord record) {
 		return new MonitorEntry(
 				OffsetDateTime.parse(record.get(0)),
@@ -26,5 +26,10 @@ public record MonitorEntry(
 
 	public boolean isOk() {
 		return responseCode < 400;
+	}
+
+	@Override
+	public int compareTo(MonitorEntry o) {
+		return this.timestamp.compareTo(o.timestamp);
 	}
 }
