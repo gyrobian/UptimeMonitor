@@ -43,6 +43,12 @@ public class ReportGenerator {
 		this.focusIntervals = focusIntervals;
 	}
 
+	/**
+	 * Generates the report. This will generate a ZIP file containing reports
+	 * for every individual site that this generator is responsible for. The ZIP
+	 * file has the format "yyyy-MM-dd_HH-mm-ss_report-name.zip".
+	 * @throws IOException If an error occurs while generating the report.
+	 */
 	public void generate() throws IOException {
 		System.out.println("Generating report: " + name + ".");
 		String sanitizedName = name.replaceAll("\\s+", "-");
@@ -62,6 +68,16 @@ public class ReportGenerator {
 		}
 	}
 
+	/**
+	 * Generates an individual site report for a single site, and returns the
+	 * path to the file that the report is contained in.
+	 * @param site The site to generate the report for.
+	 * @param dir The directory to generate the report in.
+	 * @param start The starting date (inclusive) for the report.
+	 * @param end The ending date (inclusive) for the report.
+	 * @return The path to the generated file.
+	 * @throws IOException If an error occurs while writing the file.
+	 */
 	private Path generateSiteReport(String site, Path dir, LocalDate start, LocalDate end) throws IOException {
 		var data = new MeasurementService().getData(site, start, end, focusIntervals);
 		Path file = dir.resolve(site + format.extension());
@@ -73,6 +89,12 @@ public class ReportGenerator {
 		return file;
 	}
 
+	/**
+	 * Writes a textual report.
+	 * @param data The report data.
+	 * @param file The file to write to.
+	 * @throws IOException If an error occurs while writing.
+	 */
 	private void writeText(ReportData data, Path file) throws IOException {
 		PrintWriter w = new PrintWriter(Files.newBufferedWriter(file));
 		w.printf("Performance data for site %s from %s to %s, generated in %d ms.\n", data.siteName(), data.startDate(), data.endDate(), data.measurementDuration());
@@ -81,6 +103,13 @@ public class ReportGenerator {
 		w.close();
 	}
 
+	/**
+	 * Writes a JSON report that contains a full serialized version of the
+	 * report data.
+	 * @param data The report data.
+	 * @param file The file to write to.
+	 * @throws IOException If an error occurs while writing.
+	 */
 	private void writeJson(ReportData data, Path file) throws IOException {
 		ObjectMapper mapper = new ObjectMapper();
 		mapper.registerModule(new JavaTimeModule());
@@ -90,6 +119,12 @@ public class ReportGenerator {
 		out.close();
 	}
 
+	/**
+	 * Writes a PDF report.
+	 * @param data The report data.
+	 * @param file The file to write to.
+	 * @throws IOException If an error occurs while writing.
+	 */
 	private void writePdf(ReportData data, Path file) throws IOException {
 		var out = Files.newOutputStream(file);
 		var writer = new PdfWriter();

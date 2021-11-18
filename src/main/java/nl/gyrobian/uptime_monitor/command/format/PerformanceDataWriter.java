@@ -9,5 +9,11 @@ import java.io.OutputStream;
  * single site.
  */
 public interface PerformanceDataWriter {
+	/**
+	 * Writes the given report data to the given output stream.
+	 * @param data The report data.
+	 * @param out The output stream to write to.
+	 * @throws Exception If an error occurs while writing.
+	 */
 	void write(ReportData data, OutputStream out) throws Exception;
 }

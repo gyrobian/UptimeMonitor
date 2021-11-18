@@ -17,6 +17,7 @@ import java.time.format.DateTimeFormatter;
 
 /**
  * Writes PDF reports containing performance data.
+ * TODO: Find some way of making this look nicer. Maybe use OpenPDF or FlyingSaucer
  */
 public class PdfWriter implements PerformanceDataWriter {
 	private static final float LEFT_MARGIN = 60.0f;

@@ -1,0 +1,25 @@
+# Example configuration file.
+
+maxFileSize: 2MB # The maximum file size for generated data files.
+
+# "sites" contains a list of sites to monitor.
+sites:
+  - name: google # A name for the site, used internally by the program.
+    url: https://www.google.com # The URL to send requests to.
+    interval: 120 # How often to send requests, in seconds.
+  - name: youtube-music
+    url: https://music.youtube.com
+    interval: 180
+
+# "reports" contains a list of reports to generate.
+reports:
+  - name: google-stuff # A name for the report.
+    sites: # The list of sites that will be included in this report.
+      - google
+      - youtube-music
+    focus-intervals: # An optional list of focus intervals. If provided, statistics are computed for these time intervals separately, in addition to the main data.
+      - "08:00 - 18:00" # Should be formatted in 24h time, with a hyphen separating the start from the end.
+      - "10:05 - 10:45"
+    interval: monthly # How often to generate the report. Can be "monthly" or "weekly".
+    span: P1M # An ISO-8601 duration specifying how far back to gather data for each report. https://en.wikipedia.org/wiki/ISO_8601#Durations
+    format: JSON # The format for the reports. Can be "PDF", "TEXT", or "JSON".
