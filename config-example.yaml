@@ -23,3 +23,21 @@ reports:
     interval: monthly # How often to generate the report. Can be "monthly" or "weekly".
     span: P1M # An ISO-8601 duration specifying how far back to gather data for each report. https://en.wikipedia.org/wiki/ISO_8601#Durations
     format: JSON # The format for the reports. Can be "PDF", "TEXT", or "JSON".
+
+    distribution: # An optional section that allows you to configure how generated reports are distributed.
+      - via: email
+        to: john@example.com
+        message: |
+          Hi John,
+
+          Attached you'll find the report %report-name% which was generated at %timestamp%.
+      - via: http
+        to: https://www.example.com/reports
+
+# Settings for various integrations, like credentials for distribution methods.
+mail:
+  smtp:
+    host: smtp.mailtrap.io
+    port: 465
+    username: example-user
+    password: example-pass

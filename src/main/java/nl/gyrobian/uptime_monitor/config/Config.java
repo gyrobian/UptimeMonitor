@@ -1,6 +1,5 @@
-package nl.gyrobian.uptime_monitor;
+package nl.gyrobian.uptime_monitor.config;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
@@ -21,25 +20,6 @@ public class Config {
 	private String maxFileSize;
 	private List<SiteConfig> sites;
 	private List<ReportConfig> reports;
-
-	@Data
-	public static class SiteConfig {
-		private String name;
-		private String url;
-		private int interval;
-	}
-
-	@Data
-	public static class ReportConfig {
-		private String name;
-		private List<String> sites;
-		private String interval;
-		private String span;
-		private String format;
-
-		@JsonProperty("focus-intervals")
-		private List<String> focusIntervals;
-	}
 
 	public static Config load(Path file) {
 		if (Files.notExists(file)) return null;

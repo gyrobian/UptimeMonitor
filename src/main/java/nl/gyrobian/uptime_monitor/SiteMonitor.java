@@ -1,6 +1,7 @@
 package nl.gyrobian.uptime_monitor;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import nl.gyrobian.uptime_monitor.config.SiteConfig;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
 
@@ -30,7 +31,7 @@ import java.util.stream.Collectors;
 public class SiteMonitor implements Closeable {
 	public static final DateTimeFormatter FILE_TIMESTAMP_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss");
 
-	private final Config.SiteConfig site;
+	private final SiteConfig site;
 	private final HttpClient httpClient;
 	private final HttpRequest.Builder requestBuilder;
 	private final ObjectMapper mapper;
@@ -39,7 +40,7 @@ public class SiteMonitor implements Closeable {
 	private CSVPrinter csvPrinter;
 	private Path recordFile;
 
-	public SiteMonitor(Config.SiteConfig site, long maxFileSize) throws IOException {
+	public SiteMonitor(SiteConfig site, long maxFileSize) throws IOException {
 		this.site = site;
 		this.maxFileSize = maxFileSize;
 		this.mapper = new ObjectMapper();

@@ -1,6 +1,8 @@
 package nl.gyrobian.uptime_monitor;
 
 import nl.gyrobian.uptime_monitor.command.MeasureSubcommand;
+import nl.gyrobian.uptime_monitor.config.Config;
+import nl.gyrobian.uptime_monitor.config.ReportConfig;
 import nl.gyrobian.uptime_monitor.data.FocusInterval;
 import nl.gyrobian.uptime_monitor.report.Format;
 import nl.gyrobian.uptime_monitor.report.Interval;
@@ -170,7 +172,7 @@ public class UptimeMonitor implements Callable<Integer> {
 	 * @param scheduler The scheduler to schedule report generators on.
 	 * @throws SchedulerException If an error occurs while scheduling jobs.
 	 */
-	private void initializeReportGenerators(List<Config.ReportConfig> reportConfigs, Scheduler scheduler) throws SchedulerException {
+	private void initializeReportGenerators(List<ReportConfig> reportConfigs, Scheduler scheduler) throws SchedulerException {
 		for (var report : reportConfigs) {
 			if (report.getSites() == null || report.getSites().isEmpty()) throw new IllegalArgumentException("Missing sites for report " + report.getName());
 			Interval interval = Interval.valueOf(report.getInterval().trim().toUpperCase());
