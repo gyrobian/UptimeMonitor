@@ -15,4 +15,7 @@ public class ReportConfig {
 
 	@JsonProperty("focus-intervals")
 	private List<String> focusIntervals;
+
+	@JsonProperty("distribution")
+	private List<ReportDistributionConfig> distributions;
 }

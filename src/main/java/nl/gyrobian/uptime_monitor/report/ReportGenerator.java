@@ -3,12 +3,20 @@ package nl.gyrobian.uptime_monitor.report;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import lombok.AllArgsConstructor;
 import net.lingala.zip4j.ZipFile;
 import nl.gyrobian.uptime_monitor.command.format.PdfWriter;
+import nl.gyrobian.uptime_monitor.config.MailConfig;
+import nl.gyrobian.uptime_monitor.config.ReportDistributionConfig;
 import nl.gyrobian.uptime_monitor.data.FocusInterval;
 import nl.gyrobian.uptime_monitor.data.MeasurementService;
 import nl.gyrobian.uptime_monitor.data.ReportData;
 
+import javax.mail.*;
+import javax.mail.internet.InternetAddress;
+import javax.mail.internet.MimeBodyPart;
+import javax.mail.internet.MimeMessage;
+import javax.mail.internet.MimeMultipart;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -21,11 +29,14 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Properties;
+import java.util.stream.Collectors;
 
 /**
  * A report generator is responsible for preparing the data for, and generating
  * a report.
  */
+@AllArgsConstructor
 public class ReportGenerator {
 	private static final Path REPORTS_DIR = Path.of("reports");
 
@@ -34,14 +45,8 @@ public class ReportGenerator {
 	private final Format format;
 	private final Period span;
 	private final List<FocusInterval> focusIntervals;
-
-	public ReportGenerator(String name, List<String> sites, Format format, Period span, List<FocusInterval> focusIntervals) {
-		this.name = name;
-		this.sites = sites;
-		this.format = format;
-		this.span = span;
-		this.focusIntervals = focusIntervals;
-	}
+	private final List<ReportDistributionConfig> distributionConfigs;
+	private final MailConfig mailConfig;
 
 	/**
 	 * Generates the report. This will generate a ZIP file containing reports
@@ -66,6 +71,7 @@ public class ReportGenerator {
 		try (var s = Files.walk(dir).map(Path::toFile).sorted(Comparator.reverseOrder())) {
 			s.forEach(File::delete);
 		}
+		distributeReport(zip.getFile().toPath());
 	}
 
 	/**
@@ -87,6 +93,20 @@ public class ReportGenerator {
 			case PDF -> writePdf(data, file);
 		}
 		return file;
+	}
+
+	/**
+	 * Distributes a report file according to this generator's list of
+	 * distribution configs.
+	 * @param reportFile The file to distribute.
+	 */
+	private void distributeReport(Path reportFile) {
+		if (distributionConfigs == null || distributionConfigs.isEmpty()) return;
+		for (var dist : distributionConfigs) {
+			if (dist.getVia().equalsIgnoreCase("email")) {
+				sendEmail(dist, reportFile);
+			}
+		}
 	}
 
 	/**
@@ -130,5 +150,56 @@ public class ReportGenerator {
 		var writer = new PdfWriter();
 		writer.write(data, out);
 		out.close();
+	}
+
+	/**
+	 * Sends an email with the report file attached.
+	 * @param dist The distribution config.
+	 * @param reportFile The report file to attach.
+	 */
+	private void sendEmail(ReportDistributionConfig dist, Path reportFile) {
+		Properties mailProps = new Properties();
+		mailProps.put("mail.smtp.auth", true);
+		mailProps.put("mail.smtp.starttls.enable", "true");
+		mailProps.put("mail.smtp.ssl.trust", mailConfig.getSmtp().getHost());
+		mailProps.put("mail.smtp.host", mailConfig.getSmtp().getHost());
+		mailProps.put("mail.smtp.port", mailConfig.getSmtp().getPort());
+		Session session = Session.getInstance(mailProps, new Authenticator() {
+			@Override
+			protected PasswordAuthentication getPasswordAuthentication() {
+				return new PasswordAuthentication(mailConfig.getSmtp().getUsername(), mailConfig.getSmtp().getPassword());
+			}
+		});
+		Message msg = new MimeMessage(session);
+		try {
+			msg.setFrom(new InternetAddress(mailConfig.getSmtp().getFromAddress()));
+			msg.setRecipient(Message.RecipientType.TO, new InternetAddress(dist.getTo()));
+			msg.setSubject("Uptime Report - " + this.name);
+
+			Multipart multipart = new MimeMultipart();
+			var bodyPart = new MimeBodyPart();
+			String text = """
+					Hello,<br>
+					<br>
+					The <em>%REPORT%</em> report has just been generated. It contains uptime information for the following sites:<br>
+					<ul>
+						%SITES%
+					</ul><br>
+					The report was generated using the <em>%FORMAT%</em> format.""";
+			String sitesText = sites.stream().map(s -> "<li>" + s + "</li>").collect(Collectors.joining());
+			text = text.replaceAll("%REPORT%", name).replaceAll("%SITES%", sitesText).replaceAll("%FORMAT%", format.name());
+			bodyPart.setContent(text, "text/html; charset=utf-8");
+			multipart.addBodyPart(bodyPart);
+
+			var attachment = new MimeBodyPart();
+			attachment.attachFile(reportFile.toFile());
+			multipart.addBodyPart(attachment);
+
+			msg.setContent(multipart);
+			Transport.send(msg);
+		} catch (MessagingException | IOException e) {
+			System.err.println("An error occurred while attempting to send a report email to " + dist.getTo());
+			e.printStackTrace();
+		}
 	}
 }

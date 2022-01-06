@@ -21,6 +21,8 @@ public class Config {
 	private List<SiteConfig> sites;
 	private List<ReportConfig> reports;
 
+	private MailConfig mail;
+
 	public static Config load(Path file) {
 		if (Files.notExists(file)) return null;
 		try {

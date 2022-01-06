@@ -1,5 +1,6 @@
 package nl.gyrobian.uptime_monitor;
 
+import nl.gyrobian.uptime_monitor.command.GenerateReportsSubcommand;
 import nl.gyrobian.uptime_monitor.command.MeasureSubcommand;
 import nl.gyrobian.uptime_monitor.config.Config;
 import nl.gyrobian.uptime_monitor.config.ReportConfig;
@@ -32,7 +33,8 @@ import java.util.concurrent.*;
 		name = "totalUptime-monitor",
 		description = "Monitors and records the totalUptime of sites.",
 		subcommands = {
-				MeasureSubcommand.class
+				MeasureSubcommand.class,
+				GenerateReportsSubcommand.class
 		}
 )
 public class UptimeMonitor implements Callable<Integer> {
@@ -44,8 +46,8 @@ public class UptimeMonitor implements Callable<Integer> {
 	/**
 	 * The path to the configuration file to use.
 	 */
-	@CommandLine.Option(names = {"-c", "--config"}, description = "Path to the configuration file to use.", defaultValue = "./config.yaml")
-	String configPath;
+	@CommandLine.Option(names = {"-c", "--config"}, description = "Path to the configuration file to use.", defaultValue = "./config.yaml", scope = CommandLine.ScopeType.INHERIT)
+	public String configPath;
 
 	/**
 	 * Whether to ignore CLI, meaning it will run effectively in a while-loop
@@ -73,7 +75,7 @@ public class UptimeMonitor implements Callable<Integer> {
 		System.out.println("Started monitoring all configured sites.");
 		Scheduler scheduler = StdSchedulerFactory.getDefaultScheduler();
 		if (config.getReports() != null && !config.getReports().isEmpty()) {
-			initializeReportGenerators(config.getReports(), scheduler);
+			initializeReportGenerators(config, scheduler);
 		}
 		addShutdownHook(executor, monitors, scheduler);
 		if (!ignoreCli) {
@@ -168,11 +170,12 @@ public class UptimeMonitor implements Callable<Integer> {
 	/**
 	 * Initializes any configured report generators, by preparing and scheduling
 	 * a job for them according to their defined schedule.
-	 * @param reportConfigs A list of report configuration objects.
+	 * @param config The application configuration.
 	 * @param scheduler The scheduler to schedule report generators on.
 	 * @throws SchedulerException If an error occurs while scheduling jobs.
 	 */
-	private void initializeReportGenerators(List<ReportConfig> reportConfigs, Scheduler scheduler) throws SchedulerException {
+	private void initializeReportGenerators(Config config, Scheduler scheduler) throws SchedulerException {
+		var reportConfigs = config.getReports();
 		for (var report : reportConfigs) {
 			if (report.getSites() == null || report.getSites().isEmpty()) throw new IllegalArgumentException("Missing sites for report " + report.getName());
 			Interval interval = Interval.valueOf(report.getInterval().trim().toUpperCase());
@@ -192,8 +195,9 @@ public class UptimeMonitor implements Callable<Integer> {
 			JobDetail job = JobBuilder.newJob(ReportGenerationJob.class)
 					.withIdentity("report-generation-" + report.getName(), "reports")
 					.build();
-			var generator = new ReportGenerator(report.getName(), report.getSites(), format, span, focusIntervals);
+			var generator = new ReportGenerator(report.getName(), report.getSites(), format, span, focusIntervals, report.getDistributions(), config.getMail());
 			job.getJobDataMap().put("generator", generator);
+			job.getJobDataMap().put("config", report);
 			Trigger trigger = TriggerBuilder.newTrigger()
 					.withIdentity("report-generation-trigger-" + report.getName(), "report-triggers")
 					.withSchedule(interval.getSchedule())

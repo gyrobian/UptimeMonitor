@@ -27,10 +27,6 @@ reports:
     distribution: # An optional section that allows you to configure how generated reports are distributed.
       - via: email
         to: john@example.com
-        message: |
-          Hi John,
-
-          Attached you'll find the report %report-name% which was generated at %timestamp%.
       - via: http
         to: https://www.example.com/reports
 
@@ -41,3 +37,4 @@ mail:
     port: 465
     username: example-user
     password: example-pass
+    from-address: noreply@example.com
