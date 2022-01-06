@@ -160,7 +160,9 @@ public class ReportGenerator {
 	private void sendEmail(ReportDistributionConfig dist, Path reportFile) {
 		Properties mailProps = new Properties();
 		mailProps.put("mail.smtp.auth", true);
-		mailProps.put("mail.smtp.starttls.enable", "true");
+		mailProps.put("mail.smtp.starttls.enable", false);
+		mailProps.put("mail.smtp.starttls.required", false);
+		mailProps.put("mail.smtp.ssl.enable", true);
 		mailProps.put("mail.smtp.ssl.trust", mailConfig.getSmtp().getHost());
 		mailProps.put("mail.smtp.host", mailConfig.getSmtp().getHost());
 		mailProps.put("mail.smtp.port", mailConfig.getSmtp().getPort());
