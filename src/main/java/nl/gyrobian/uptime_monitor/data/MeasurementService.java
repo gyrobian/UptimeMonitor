@@ -46,7 +46,13 @@ public class MeasurementService {
 							isHeader = false;
 							continue;
 						}
-						var entry = MonitorEntry.fromCsvRecord(record);
+						MonitorEntry entry;
+						try {
+							entry = MonitorEntry.fromCsvRecord(record);
+						} catch (IOException e) {
+							System.out.println("Skipping corrupted record: " + e.getMessage());
+							continue;
+						}
 						// Skip this record if its timestamp is outside the measurement period.
 						if (shouldReadRecord(entry.timestamp(), startDate, endDate)) {
 							entries.add(entry);
